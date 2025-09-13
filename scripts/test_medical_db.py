@@ -8,10 +8,6 @@ import asyncio
 import os
 import sys
 from pathlib import Path
-
-# Add the src directory to the path
-
-
 from src.agents.patient_consultation_agent import MedicalDatabase
 from uuid import uuid4
 import json

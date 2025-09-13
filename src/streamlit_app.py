@@ -23,7 +23,7 @@ from schema.task_data import TaskData, TaskDataStatus
 # The app heavily uses AgentClient to interact with the agent's FastAPI endpoints.
 
 
-APP_TITLE = "Agent Service Toolkit"
+APP_TITLE = "Tricog healthcare AI Assistant"
 APP_ICON = "🧰"
 USER_ID_COOKIE = "user_id"
 
@@ -113,9 +113,7 @@ async def main() -> None:
     with st.sidebar:
         st.header(f"{APP_ICON} {APP_TITLE}")
 
-        ""
-        "Full toolkit for running an AI agent service built with LangGraph, FastAPI and Streamlit"
-        ""
+       
 
         if st.button(":material/chat: New Chat", use_container_width=True):
             st.session_state.messages = []
@@ -191,6 +189,46 @@ async def main() -> None:
             case "rag-assistant":
                 WELCOME = """Hello! I'm an AI-powered Company Policy & HR assistant with access to AcmeTech's Employee Handbook.
                 I can help you find information about benefits, remote work, time-off policies, company values, and more. Ask me anything!"""
+            case "medical-rag-assistant":
+                WELCOME = """Hello! I'm MedBot, a specialized medical assistant designed to help healthcare professionals with symptom assessment.
+                
+                I have access to a comprehensive database of clinical follow-up questions organized by medical categories:
+                - 🚨 Red Flag Symptoms (emergency indicators)
+                - 📊 Vital Signs Assessment
+                - 🔍 Detailed Symptom Analysis  
+                - 📋 Medical History Review
+                - ⚖️ Lifestyle Risk Factors
+                - 🧠 Psychosocial Considerations
+                
+                **Example queries you can ask:**
+                - "What questions should I ask about chest pain?"
+                - "Follow-up questions for shortness of breath"
+                - "Assessment protocol for syncope"
+                - "Palpitations evaluation checklist"
+                
+                **Important:** I assist with clinical assessment but do not replace professional medical judgment. Always consult appropriate healthcare professionals for diagnosis and treatment decisions."""
+            case "patient-consultation-agent":
+                WELCOME = """Hello! I'm PatientBot, your medical consultation assistant. I'm here to help collect detailed information about your symptoms to assist your healthcare provider in giving you the best possible care.
+                
+                **What I'll do:**
+                - Collect your basic information (name, email)
+                - Ask about your symptoms and health concerns
+                - Guide you through structured follow-up questions based on medical protocols
+                - Provide you with a comprehensive summary for your healthcare provider
+                
+                **This consultation will:**
+                - Take approximately 10-15 minutes
+                - Ask systematic questions about each symptom you mention
+                - Organize your information in a medical-friendly format
+                - Help ensure no important details are missed
+                
+                **Important notes:**
+                - This is an information-gathering tool, not a diagnostic service
+                - Please seek immediate medical attention for any emergency symptoms
+                - All information collected will help your healthcare provider make better decisions
+                - Your privacy and confidentiality are protected
+                
+                Ready to begin? Just type "start" or tell me you're ready to begin the consultation."""
             case _:
                 WELCOME = "Hello! I'm an AI agent. Ask me anything!"
 

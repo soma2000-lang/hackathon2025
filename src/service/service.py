@@ -99,7 +99,6 @@ async def info() -> ServiceMetadata:
         default_model=settings.DEFAULT_MODEL,
     )
 
-
 async def _handle_input(user_input: UserInput, agent: AgentGraph) -> tuple[dict[str, Any], UUID]:
     """
     Parse user input and handle any required interrupt resumption.
@@ -115,7 +114,6 @@ async def _handle_input(user_input: UserInput, agent: AgentGraph) -> tuple[dict[
     if settings.LANGFUSE_TRACING:
         # Initialize Langfuse CallbackHandler for Langchain (tracing)
         langfuse_handler = CallbackHandler()
-
         callbacks.append(langfuse_handler)
 
     if user_input.agent_config:
@@ -126,10 +124,12 @@ async def _handle_input(user_input: UserInput, agent: AgentGraph) -> tuple[dict[
             )
         configurable.update(user_input.agent_config)
 
+    # Add recursion limit to prevent infinite loops
     config = RunnableConfig(
         configurable=configurable,
         run_id=run_id,
         callbacks=callbacks,
+        recursion_limit=50,  # Increased from default 25 to handle complex consultation flows
     )
 
     # Check for interrupts that need to be resumed
@@ -151,8 +151,6 @@ async def _handle_input(user_input: UserInput, agent: AgentGraph) -> tuple[dict[
     }
 
     return kwargs, run_id
-
-
 @router.post("/{agent_id}/invoke")
 @router.post("/invoke")
 async def invoke(user_input: UserInput, agent_id: str = DEFAULT_AGENT) -> ChatMessage:
@@ -294,6 +292,7 @@ async def message_generator(
                 # Drop them.
                 if not isinstance(msg, AIMessageChunk):
                     continue
+                # content = msg.content
                 content = remove_tool_calls(msg.content)
                 if content:
                     # Empty content in the context of OpenAI usually means
@@ -371,6 +370,23 @@ async def feedback(feedback: Feedback) -> FeedbackResponse:
     return FeedbackResponse()
 
 
+# @router.post("/history")
+# def history(input: ChatHistoryInput) -> ChatHistory:
+#     """
+#     Get chat history.
+#     """
+#     # TODO: Hard-coding DEFAULT_AGENT here is wonky
+#     agent: AgentGraph = get_agent(DEFAULT_AGENT)
+#     try:
+#         state_snapshot = agent.get_state(
+#             config=RunnableConfig(configurable={"thread_id": input.thread_id})
+#         )
+#         messages: list[AnyMessage] = state_snapshot.values["messages"]
+#         chat_messages: list[ChatMessage] = [langchain_to_chat_message(m) for m in messages]
+#         return ChatHistory(messages=chat_messages)
+#     except Exception as e:
+#         logger.error(f"An exception occurred: {e}")
+#         raise HTTPException(status_code=500, detail="Unexpected error")
 @router.post("/history")
 def history(input: ChatHistoryInput) -> ChatHistory:
     """
@@ -380,7 +396,10 @@ def history(input: ChatHistoryInput) -> ChatHistory:
     agent: AgentGraph = get_agent(DEFAULT_AGENT)
     try:
         state_snapshot = agent.get_state(
-            config=RunnableConfig(configurable={"thread_id": input.thread_id})
+            config=RunnableConfig(
+                configurable={"thread_id": input.thread_id},
+                recursion_limit=50  # Add recursion limit here too
+            )
         )
         messages: list[AnyMessage] = state_snapshot.values["messages"]
         chat_messages: list[ChatMessage] = [langchain_to_chat_message(m) for m in messages]

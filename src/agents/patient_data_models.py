@@ -1,0 +1,263 @@
+from datetime import datetime
+from typing import Dict, List, Optional, Any
+from pydantic import BaseModel, Field, EmailStr
+from enum import Enum
+
+
+class ConsultationStage(str, Enum):
+    """Stages of patient consultation process."""
+    GREETING = "greeting"
+    COLLECTING_BASIC_INFO = "collecting_basic_info"
+    COLLECTING_SYMPTOMS = "collecting_symptoms"
+    ASKING_FOLLOWUP_QUESTIONS = "asking_followup_questions"
+    SUMMARY = "summary"
+    COMPLETED = "completed"
+
+
+class QuestionCategory(str, Enum):
+    """Categories of medical follow-up questions."""
+    RED_FLAGS = "red_flags"
+    VITAL_SIGNS = "vital_signs"
+    SYMPTOM_DETAILS = "symptom_details"
+    MEDICAL_HISTORY = "medical_history"
+    PAST_MEDICAL_HISTORY = "past_medical_history"
+    LIFESTYLE_RISK_FACTORS = "lifestyle_risk_factors"
+    PSYCHOSOCIAL = "psychosocial"
+
+
+class PatientResponse(BaseModel):
+    """Individual patient response to a question."""
+    question_id: str
+    question_text: str
+    category: QuestionCategory
+    response: str
+    timestamp: datetime = Field(default_factory=datetime.now)
+    follow_up_needed: bool = False
+
+
+class SymptomAssessment(BaseModel):
+    """Assessment data for a specific symptom."""
+    symptom_name: str
+    symptom_description: str
+    onset_date: Optional[str] = None
+    severity: Optional[str] = None  # mild, moderate, severe
+    questions_asked: List[str] = Field(default_factory=list)
+    responses: List[PatientResponse] = Field(default_factory=list)
+    completed: bool = False
+    priority_score: int = 0  # Higher score = higher priority
+
+
+class PatientInfo(BaseModel):
+    """Basic patient information."""
+    name: Optional[str] = None
+    email: Optional[str] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
+    emergency_contact: Optional[str] = None
+
+
+class ConsultationSession(BaseModel):
+    """Complete consultation session data."""
+    session_id: str
+    patient_info: PatientInfo = Field(default_factory=PatientInfo)
+    reported_symptoms: List[str] = Field(default_factory=list)
+    symptom_assessments: List[SymptomAssessment] = Field(default_factory=list)
+    current_stage: ConsultationStage = ConsultationStage.GREETING
+    current_symptom_index: int = 0
+    current_question_index: int = 0
+    consultation_start_time: datetime = Field(default_factory=datetime.now)
+    consultation_end_time: Optional[datetime] = None
+    completed: bool = False
+    summary_generated: bool = False
+    total_questions_asked: int = 0
+    
+    # Metadata
+    consultation_language: str = "english"
+    consultation_mode: str = "text"  # text, voice, video
+    referral_source: Optional[str] = None
+
+
+class MedicalQuestion(BaseModel):
+    """Structure for medical follow-up questions."""
+    id: str
+    text: str
+    category: QuestionCategory
+    priority: int  # 1-10, 1 being highest priority
+    symptom_specific: bool = True
+    required: bool = False
+    follow_up_triggers: List[str] = Field(default_factory=list)  # Keywords that trigger follow-up
+    
+    
+class SymptomProtocol(BaseModel):
+    """Protocol for assessing a specific symptom."""
+    symptom_name: str
+    questions: List[MedicalQuestion]
+    red_flag_questions: List[MedicalQuestion] = Field(default_factory=list)
+    emergency_keywords: List[str] = Field(default_factory=list)
+    min_questions_required: int = 3
+    max_questions_allowed: int = 15
+
+
+class ConsultationSummary(BaseModel):
+    """Generated summary of the consultation."""
+    session_id: str
+    patient_name: str
+    consultation_date: datetime
+    symptoms_reported: List[str]
+    key_findings: List[str] = Field(default_factory=list)
+    red_flags_identified: List[str] = Field(default_factory=list)
+    recommendations: List[str] = Field(default_factory=list)
+    total_duration_minutes: int
+    next_steps: List[str] = Field(default_factory=list)
+    healthcare_provider_notes: str = ""
+    
+    def to_formatted_string(self) -> str:
+        """Convert summary to formatted string for display."""
+        return f"""
+# PATIENT CONSULTATION SUMMARY
+
+**Patient Information:**
+- Name: {self.patient_name}
+- Consultation Date: {self.consultation_date.strftime('%B %d, %Y at %I:%M %p')}
+- Duration: {self.total_duration_minutes} minutes
+
+**Symptoms Reported:**
+{chr(10).join([f"• {symptom}" for symptom in self.symptoms_reported])}
+
+**Key Findings:**
+{chr(10).join([f"• {finding}" for finding in self.key_findings])}
+
+**Red Flags Identified:**
+{chr(10).join([f"🚨 {flag}" for flag in self.red_flags_identified]) if self.red_flags_identified else "• None identified"}
+
+**Recommendations:**
+{chr(10).join([f"• {rec}" for rec in self.recommendations])}
+
+**Next Steps:**
+{chr(10).join([f"• {step}" for step in self.next_steps])}
+
+**Important Note:** This consultation summary is for informational purposes only and should be reviewed by qualified healthcare professionals for proper diagnosis and treatment planning.
+
+---
+*Generated by PatientBot Medical Consultation Assistant*
+        """.strip()
+
+
+# Database schema for storing consultation data
+CONSULTATION_TABLES = {
+    "patient_consultations": """
+    CREATE TABLE IF NOT EXISTS patient_consultations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT UNIQUE NOT NULL,
+        user_id TEXT,
+        patient_name TEXT,
+        patient_email TEXT,
+        consultation_stage TEXT NOT NULL,
+        symptoms_reported TEXT,  -- JSON array
+        current_symptom_index INTEGER DEFAULT 0,
+        current_question_index INTEGER DEFAULT 0,
+        consultation_start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        consultation_end_time TIMESTAMP,
+        completed BOOLEAN DEFAULT FALSE,
+        summary_generated BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """,
+    
+    "patient_responses": """
+    CREATE TABLE IF NOT EXISTS patient_responses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        question_id TEXT NOT NULL,
+        question_text TEXT NOT NULL,
+        question_category TEXT NOT NULL,
+        response_text TEXT NOT NULL,
+        symptom_name TEXT,
+        response_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        follow_up_needed BOOLEAN DEFAULT FALSE,
+        FOREIGN KEY (session_id) REFERENCES patient_consultations (session_id)
+    );
+    """,
+    
+    "consultation_summaries": """
+    CREATE TABLE IF NOT EXISTS consultation_summaries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT UNIQUE NOT NULL,
+        summary_text TEXT NOT NULL,
+        key_findings TEXT,  -- JSON array
+        red_flags TEXT,     -- JSON array
+        recommendations TEXT, -- JSON array
+        next_steps TEXT,    -- JSON array
+        generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (session_id) REFERENCES patient_consultations (session_id)
+    );
+    """
+}
+
+
+def get_question_priority_order() -> List[QuestionCategory]:
+    """Get the priority order for asking questions."""
+    return [
+        QuestionCategory.RED_FLAGS,
+        QuestionCategory.VITAL_SIGNS,
+        QuestionCategory.SYMPTOM_DETAILS,
+        QuestionCategory.MEDICAL_HISTORY,
+        QuestionCategory.PAST_MEDICAL_HISTORY,
+        QuestionCategory.LIFESTYLE_RISK_FACTORS,
+        QuestionCategory.PSYCHOSOCIAL
+    ]
+
+
+def get_emergency_keywords() -> List[str]:
+    """Keywords that indicate potential medical emergencies."""
+    return [
+        "severe", "crushing", "sudden", "worst ever", "unable to breathe",
+        "chest crushing", "radiating pain", "loss of consciousness",
+        "severe headache", "confusion", "difficulty speaking",
+        "paralysis", "severe bleeding", "choking", "allergic reaction",
+        "anaphylaxis", "cardiac arrest", "stroke symptoms",
+        "severe abdominal pain", "difficulty swallowing",
+        "severe shortness of breath", "blue lips", "blue skin"
+    ]
+
+
+def categorize_question_importance(question_text: str) -> int:
+    """Categorize question importance (1-10, 1 being most important)."""
+    emergency_keywords = get_emergency_keywords()
+    question_lower = question_text.lower()
+    
+    # Red flag questions get highest priority
+    if any(keyword in question_lower for keyword in emergency_keywords):
+        return 1
+    
+    # Vital signs questions
+    if any(keyword in question_lower for keyword in ["blood pressure", "heart rate", "temperature", "oxygen"]):
+        return 2
+    
+    # Onset and duration questions
+    if any(keyword in question_lower for keyword in ["when", "how long", "started"]):
+        return 3
+    
+    # Character and quality questions
+    if any(keyword in question_lower for keyword in ["describe", "feel like", "type of"]):
+        return 4
+    
+    # Associated symptoms
+    if any(keyword in question_lower for keyword in ["associated", "along with", "other symptoms"]):
+        return 5
+    
+    # Medical history
+    if any(keyword in question_lower for keyword in ["history", "previous", "past", "before"]):
+        return 6
+    
+    # Lifestyle factors
+    if any(keyword in question_lower for keyword in ["smoking", "drinking", "exercise", "diet"]):
+        return 7
+    
+    # Psychosocial factors
+    if any(keyword in question_lower for keyword in ["stress", "anxiety", "depression", "emotional"]):
+        return 8
+    
+    # Default priority
+    return 5
